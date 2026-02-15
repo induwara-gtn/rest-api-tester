@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swagger API Tester</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background-color: #f8f9fa;
+        }
+
+        #sidebar {
+            width: 350px;
+            height: 100vh;
+            overflow-y: auto;
+            background: white;
+            border-right: 1px solid #dee2e6;
+        }
+
+        #main {
+            flex: 1;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .endpoint-item {
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .endpoint-item:hover {
+            background-color: #f1f3f5;
+        }
+
+        .endpoint-item.active {
+            background-color: #e9ecef;
+            border-left: 4px solid #0d6efd;
+        }
+
+        .method-badge {
+            width: 60px;
+            display: inline-block;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .badge-GET {
+            background-color: #61affe;
+            color: white;
+        }
+
+        .badge-POST {
+            background-color: #49cc90;
+            color: white;
+        }
+
+        .badge-PUT {
+            background-color: #fca130;
+            color: white;
+        }
+
+        .badge-DELETE {
+            background-color: #f93e3e;
+            color: white;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow: auto;
+        }
+
+        .param-row {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body class="d-flex">
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+        <div class="p-3 border-bottom sticky-top bg-white">
+            <h5>API Endpoints</h5>
+            <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text bg-info text-white border-info"><i class="bi bi-jira"></i> Jira</span>
+                <input type="text" id="jira-id" class="form-control border-info" placeholder="Task ID (e.g. ABC-123)">
+                <button class="btn btn-outline-info" type="button" onclick="runJiraScope()">Scope</button>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <input type="text" id="search" class="form-control form-control-sm me-2"
+                    placeholder="Filter endpoints...">
+                <div class="form-check form-switch small mb-0" id="recommended-filter-group" style="display:none;">
+                    <input class="form-check-input" type="checkbox" id="filter-recommended" onchange="filterList()">
+                    <label class="form-check-label text-nowrap" for="filter-recommended">Rec Only</label>
+                </div>
+            </div>
+            <small class="text-muted" id="count">Loading...</small>
+        </div>
+        <div id="endpoint-list"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main">
+        <div id="empty-state" class="text-center mt-5">
+            <h3>Select an endpoint to start testing</h3>
+            <p class="text-muted">Use the sidebar to choose an API endpoint.</p>
+        </div>
+
+        <div id="detail-view" style="display: none;">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <span id="method-badge" class="badge bg-secondary fs-5 me-2">METHOD</span>
+                    <span id="path-display" class="fs-5 font-monospace">/path/to/resource</span>
+                </div>
+                <button class="btn btn-primary" onclick="runTest()">Run Test</button>
+            </div>
+
+            <!-- Config & Params -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>Authentication</span>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check" name="auth-mode" id="auth-mode-token"
+                                    value="token" checked autocomplete="off">
+                                <label class="btn btn-outline-primary" for="auth-mode-token">Token</label>
+                                <input type="radio" class="btn-check" name="auth-mode" id="auth-mode-creds"
+                                    value="creds" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="auth-mode-creds">Creds</label>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Token Input -->
+                            <div id="auth-token-group">
+                                <label class="form-label small">Auth Token (Bearer)</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" id="auth-token" class="form-control"
+                                        placeholder="Paste token here...">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                        onclick="validateToken()">Validate</button>
+                                </div>
+                            </div>
+                            <!-- Credentials Inputs -->
+                            <div id="auth-creds-group" style="display:none;">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Username</label>
+                                        <input type="text" id="username" class="form-control form-control-sm"
+                                            value="gmtnew">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Password</label>
+                                        <input type="password" id="password" class="form-control form-control-sm"
+                                            value="!Testad123">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- checkbox for AI -->
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">Options</div>
+                        <div class="card-body">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="run-ai">
+                                <label class="form-check-label" for="run-ai">Run AI Analysis (Gemini)</label>
+                            </div>
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="auto-run-all" checked>
+                                <label class="form-check-label small" for="auto-run-all">Auto-Run All Batches
+                                    (Recursive)</label>
+                            </div>
+                            <div class="mt-2">
+                                <label class="form-label small text-muted mb-1">Combinatorial Depth (Intel)</label>
+                                <select id="combinatorial-mode" class="form-control form-control-sm">
+                                    <option value="minimal">Minimal (Required Only)</option>
+                                    <option value="pairwise" selected>Pairwise (All-Pairs Interactions)</option>
+                                    <option value="exhaustive">Exhaustive (Full Powerset - All Combos)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Parameters</div>
+                <div class="card-body" id="params-container">
+                    <p class="text-muted">No parameters for this endpoint.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Response Modal -->
+        <div class="modal fade" id="responseModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">API Response Detail</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="modal-request-section" style="display: none;" class="mb-3">
+                            <h6 class="text-primary border-bottom pb-1"><i class="bi bi-arrow-right-circle me-1"></i>
+                                Request</h6>
+                            <div class="bg-light p-2 rounded mb-2" style="font-size: 0.8em;">
+                                <strong>URL:</strong> <span id="modal-request-url" class="text-break"></span>
+                            </div>
+                            <pre id="modal-request-body" class="bg-dark text-white p-2 rounded"
+                                style="max-height: 25vh; overflow-y: auto; font-size: 0.8em; display: none;"></pre>
+                        </div>
+
+                        <h6 class="text-success border-bottom pb-1"><i class="bi bi-arrow-left-circle me-1"></i>
+                            Response</h6>
+                        <pre id="modal-response-body" class="bg-light p-2 rounded"
+                            style="max-height: 60vh; overflow-y: auto; font-size: 0.85em;"></pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Parameters -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Custom Parameters <small class="text-muted">(For new/hidden fields)</small></span>
+                <button class="btn btn-sm btn-outline-primary" onclick="addCustomParamRow()">+ Add</button>
+            </div>
+            <div class="card-body" id="custom-params-container">
+                <!-- Dynamic rows here -->
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div id="results-area" style="display: none;">
+            <h4>Test Results</h4>
+
+            <!-- Baseline -->
+            <div class="card mb-3 border-primary">
+                <div class="card-header bg-primary text-white d-flex justify-content-between">
+                    <span>Baseline Test</span>
+                    <strong id="res-status">PENDING</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3"><strong>Status:</strong> <span id="res-code">-</span></div>
+                        <div class="col-md-3"><strong>Time:</strong> <span id="res-time">-</span> ms</div>
+                        <div class="col-md-3"><strong>Valid JSON:</strong> <span id="res-json">-</span></div>
+                        <div class="col-md-3"><strong>Schema:</strong> <span id="res-schema">-</span></div>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6>Response Body (Baseline):</h6>
+                        <button class="btn btn-xs btn-outline-secondary" onclick="copyResponseBody()">Copy Body</button>
+                    </div>
+                    <pre id="res-body"
+                        style="max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9em;">Waiting for test run...</pre>
+                </div>
+            </div>
+
+            <!-- Detailed Audit Log (New) -->
+            <div class="card mb-3 border-secondary" id="audit-card" style="display:none;">
+                <div class="card-header bg-secondary text-white">Full Request/Response Audit</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Request URL:</strong> <code id="audit-url" class="text-break"></code><br>
+                        <strong>Method:</strong> <span id="audit-method" class="badge bg-light text-dark border"></span>
+                    </div>
+
+                    <ul class="nav nav-tabs mb-3" id="audit-tabs">
+                        <li class="nav-item"><a class="nav-link active" data-tab="req-headers" href="#">Req Headers</a>
+                        </li>
+                        <li class="nav-item"><a class="nav-link" data-tab="res-headers" href="#">Res Headers</a></li>
+                        <li class="nav-item"><a class="nav-link" data-tab="full-body" href="#">Full Body</a></li>
+                    </ul>
+
+                    <div id="audit-tab-content"
+                        style="max-height: 400px; overflow-y: auto; background: #fdfdfd; padding: 10px; border: 1px solid #dee2e6; border-radius: 4px;">
+                        <pre id="audit-pre" style="font-size: 0.85em; margin-bottom: 0;"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deep QA Analysis -->
+            <div class="card mb-3 border-dark" id="deep-qa-card" style="display:none;">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span>Deep QA Findings <small>(Logic & Security Heuristics)</small></span>
+                </div>
+                <div class="card-body">
+                    <!-- Logic Findings -->
+                    <div id="logic-findings" class="mb-3">
+                        <h6>Logic & Security Heuristics</h6>
+                        <ul id="logic-list" class="list-group list-group-flush small"></ul>
+                    </div>
+
+                    <!-- Path Fuzzing -->
+                    <div id="path-fuzz-section" class="mb-3" style="display:none;">
+                        <h6>Path Parameter Fuzzing</h6>
+                        <table class="table table-sm table-bordered x-small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Param</th>
+                                    <th>Value</th>
+                                    <th>Status</th>
+                                    <th>Result</th>
+                                </tr>
+                            </thead>
+                            <tbody id="path-fuzz-body"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Enum Validation -->
+                    <div id="enum-section" class="mb-3" style="display:none;">
+                        <h6>Enum Validation Checks</h6>
+                        <ul id="enum-list" class="list-group list-group-flush small"></ul>
+                    </div>
+
+                    <!-- Combinatorial -->
+                    <div id="combinatorial-section" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="d-flex align-items-center">
+                                <h6>Combinatorial Test (Required Only)</h6>
+                                <button class="btn btn-link btn-sm p-0 text-primary ms-2" onclick="showCalcDetail()">
+                                    <i class="bi bi-info-circle"></i> View calculation
+                                </button>
+                            </div>
+                            <div class="input-group input-group-sm" style="width: 250px;">
+                                <span class="input-group-text bg-white border-end-0"><i
+                                        class="bi bi-search py-1"></i></span>
+                                <input type="text" id="comb-filter" class="form-control border-start-0 ps-0"
+                                    placeholder="Filter results..." onkeyup="filterCombResults()">
+                            </div>
+                        </div>
+                        <div id="combinatorial-res" class="small"></div>
+                    </div>
+
+                    <!-- Field Progression (New) -->
+                    <div id="field-progression-section" class="mt-3 border-top pt-2" style="display:none;">
+                        <h6>Field Progression & Dynamic Scaling</h6>
+                        <div id="field-progression-content"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Analysis -->
+            <div class="card mb-3 border-info" id="ai-card" style="display:none;">
+                <div class="card-header bg-info text-dark">Gemini AI Analysis</div>
+                <div class="card-body">
+                    <div id="ai-output" style="white-space: pre-wrap;"></div>
+                </div>
+            </div>
+
+            <!-- AI Smart Tests (New) -->
+            <div class="card mb-3 border-primary" id="ai-smart-card" style="display:none;">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span>AI Smart Test Discovery</span>
+                    <button class="btn btn-sm btn-light" id="run-smart-ai-btn" onclick="runSmartAITest()">Run smart AI
+                        discovery</button>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="cr-description" class="form-label small text-muted">Change Request (CR) Description
+                            <span class="badge bg-light text-dark">Optional</span></label>
+                        <textarea class="form-control form-control-sm" id="cr-description" rows="2"
+                            placeholder="e.g. Added sorting by issuer_name and country filters. Focus on ticker data."></textarea>
+                    </div>
+                    <div id="ai-smart-output">
+                        <p class="text-muted small">Run discovery to see AI-suggested test cases for filters and
+                            sorting.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auth Analysis -->
+            <div class="card mb-3">
+                <div class="card-header">Authentication Analysis</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 border-end">
+                            <h6>Token Only</h6>
+                            <small class="text-muted">(Valid Token)</small><br>
+                            <span id="auth-token-res">-</span>
+                        </div>
+                        <div class="col-md-4 border-end">
+                            <h6>Invalid Token</h6>
+                            <small class="text-muted">(Malformed)</small><br>
+                            <span id="auth-invalid-res">-</span>
+                        </div>
+                        <div class="col-md-4">
+                            <h6>Credentials Only</h6>
+                            <small class="text-muted">(No Bearer token)</small><br>
+                            <span id="auth-creds-res">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Param Analysis -->
+            <div class="card mb-3" id="param-card" style="display:none;">
+                <div class="card-header">Parameter Analysis</div>
+                <div class="card-body">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Param</th>
+                                <th>Spec Req?</th>
+                                <th>Test Req?</th>
+                                <th>Status Without</th>
+                            </tr>
+                        </thead>
+                        <tbody id="param-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Empty Values -->
+            <div class="card mb-3" id="empty-card" style="display:none;">
+                <div class="card-header">Empty Value Handling</div>
+                <div class="card-body">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Param</th>
+                                <th>Status (Empty)</th>
+                                <th>Handled?</th>
+                            </tr>
+                        </thead>
+                        <tbody id="empty-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Fuzz Test Results -->
+            <div class="card mb-3" id="fuzz-card" style="display:none;">
+                <div class="card-header bg-info-subtle">Fuzz Testing (Granular)</div>
+                <div class="card-body">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Param</th>
+                                <th>Value Sent</th>
+                                <th>Status</th>
+                                <th>Response Preview</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fuzz-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Negative Tests -->
+            <div class="card mb-3" id="neg-card" style="display:none;">
+                <div class="card-header bg-warning-subtle">Negative Testing (Robustness)</div>
+                <div class="card-body">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Test Case</th>
+                                <th>Status Code</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody id="neg-table-body"></tbody>
+                    </table>
+                </div>
+                <!-- Research Report (Cumulative) -->
+                <div class="card mb-3 border-success" id="report-card" style="display:none;">
+                    <div class="card-header bg-success text-white">Research Report (Cumulative)</div>
+                    <div class="card-body" id="report-history">
+                        <p class="text-muted small">No items added yet.</p>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 mb-5">
+                    <button class="btn btn-primary" onclick="runTest()">Run All Tests (Phase 1-10)</button>
+                    <button class="btn btn-outline-success" id="append-report-btn" onclick="appendToReport()"
+                        style="display:none;">Append Baseline to Research Report</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <!-- Calculation Detail Modal -->
+    <div class="modal fade" id="calc-modal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Combinations Calculation Analysis</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="calc-body">
+                    <!-- Dynamic Content -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allEndpoints = [];
+        let currentEndpoint = null;
+        let recommendedIndices = [];
+        let recommendationsMap = {};
+
+        // Init
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadConfig();
+            await loadEndpoints();
+
+            // Auth mode toggle
+            document.querySelectorAll('input[name="auth-mode"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const mode = e.target.value;
+                    document.getElementById('auth-token-group').style.display = (mode === 'token' ? 'block' : 'none');
+                    document.getElementById('auth-creds-group').style.display = (mode === 'creds' ? 'block' : 'none');
+                });
+            });
+        });
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                const config = await res.json();
+                if (config.auth_token) {
+                    document.getElementById('auth-token').value = config.auth_token;
+                }
+            } catch (e) { console.error("Config load error", e); }
+        }
+
+        function showResponseModal(idx) {
+            console.log("Showing response for index:", idx);
+            const body = (window.aiResponses && window.aiResponses[idx]) || "No response found.";
+            const modalEl = document.getElementById('responseModal');
+            const bodyEl = document.getElementById('modal-response-body');
+            const reqSection = document.getElementById('modal-request-section');
+
+            if (!modalEl || !bodyEl) return;
+
+            bodyEl.textContent = body;
+            if (reqSection) reqSection.style.display = 'none';
+
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+
+        function showCombModal(idx) {
+            console.log("Showing combinatorial response for index:", idx);
+            const res = (window.lastCombResults && window.lastCombResults[idx]);
+            const body = res ? (res.body_preview || "No preview available") : "No response found.";
+
+            const modalEl = document.getElementById('responseModal');
+            const bodyEl = document.getElementById('modal-response-body');
+            const reqSection = document.getElementById('modal-request-section');
+            const reqUrlEl = document.getElementById('modal-request-url');
+            const reqBodyEl = document.getElementById('modal-request-body');
+
+            if (!modalEl || !bodyEl) return;
+
+            bodyEl.textContent = body;
+
+            if (res && res.request_url) {
+                if (reqSection) reqSection.style.display = 'block';
+                if (reqUrlEl) reqUrlEl.textContent = res.request_url;
+                if (reqBodyEl) {
+                    if (res.request_body && Object.keys(res.request_body).length > 0) {
+                        reqBodyEl.textContent = JSON.stringify(res.request_body, null, 2);
+                        reqBodyEl.style.display = 'block';
+                    } else {
+                        reqBodyEl.style.display = 'none';
+                    }
+                }
+            } else {
+                if (reqSection) reqSection.style.display = 'none';
+            }
+
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+
+        async function loadEndpoints() {
+            document.getElementById('count').innerText = "Loading endpoints...";
+            try {
+                const res = await fetch('/api/endpoints');
+                allEndpoints = await res.json();
+                renderList(allEndpoints);
+                document.getElementById('count').innerText = `${allEndpoints.length} endpoints found`;
+            } catch (e) {
+                document.getElementById('count').innerText = "Error loading endpoints";
+            }
+        }
+
+        function renderList(list) {
+            const container = document.getElementById('endpoint-list');
+            container.innerHTML = '';
+
+            const searchTerm = document.getElementById('search').value.toLowerCase();
+            const showOnlyRecommended = document.getElementById('filter-recommended').checked;
+
+            let filtered = list.filter(ep =>
+                ep.path.toLowerCase().includes(searchTerm) ||
+                (ep.summary && ep.summary.toLowerCase().includes(searchTerm)) ||
+                ep.group.toLowerCase().includes(searchTerm)
+            );
+
+            if (showOnlyRecommended) {
+                filtered = filtered.filter(ep => recommendedIndices.includes(ep.index));
+            }
+
+            // Sort: Recommended ones first
+            filtered.sort((a, b) => {
+                const aRec = recommendedIndices.includes(a.index);
+                const bRec = recommendedIndices.includes(b.index);
+                if (aRec && !bRec) return -1;
+                if (!aRec && bRec) return 1;
+                return 0;
+            });
+
+            filtered.forEach((ep) => {
+                const isRecommended = recommendedIndices.includes(ep.index);
+                const div = document.createElement('div');
+                div.className = 'endpoint-item';
+                div.dataset.index = ep.index;
+                div.onclick = () => selectEndpoint(ep);
+
+                const svcBadge = ep.service_name ? `<span class="badge bg-light text-dark border me-1" style="font-size:0.8em; opacity:0.7">${ep.service_name}</span>` : "";
+
+                if (isRecommended) {
+                    div.style.borderLeft = "5px solid #0dcaf0";
+                    div.classList.add('bg-info-subtle');
+                    const reason = recommendationsMap[ep.index];
+                    if (reason) div.title = "Jira Recommendation: " + reason;
+                }
+
+                div.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <span class="badge method-badge badge-${ep.method} me-2">${ep.method}</span>
+                        <div class="text-truncate">
+                            <div class="text-truncate" style="font-size:0.95em; font-weight:500;">${ep.path}</div>
+                            <div class="d-flex align-items-center">
+                                ${svcBadge}
+                                <small class="text-muted text-truncate" style="font-size:0.75em">${ep.summary || ep.group}</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            document.getElementById('count').innerText = `${filtered.length} endpoints displayed`;
+        }
+
+        function filterList() {
+            renderList(allEndpoints);
+        }
+
+        document.getElementById('search').addEventListener('input', () => {
+            renderList(allEndpoints);
+        });
+
+        function selectEndpoint(ep) {
+            currentEndpoint = ep;
+            // Highlight sidebar
+            document.querySelectorAll('.endpoint-item').forEach(el => el.classList.remove('active'));
+            const activeEl = document.querySelector(`.endpoint-item[data-index="${ep.index}"]`);
+            if (activeEl) activeEl.classList.add('active');
+
+            // Show details
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('detail-view').style.display = 'block';
+            document.getElementById('results-area').style.display = 'none';
+            window.aiResponses = {}; // Clear old responses
+            window.currentSuggestions = []; // Clear old suggestions
+
+            document.getElementById('method-badge').innerText = ep.method;
+            document.getElementById('method-badge').className = `badge fs-5 me-2 badge-${ep.method}`;
+            document.getElementById('path-display').innerText = ep.path;
+
+            // Render params
+            const paramsCont = document.getElementById('params-container');
+            paramsCont.innerHTML = '';
+
+            if (ep.params && ep.params.length > 0) {
+                // Header row
+                const headerRow = document.createElement('div');
+                headerRow.className = "row mb-2 fw-bold small";
+                headerRow.innerHTML = `
+                    <div class="col-md-2">Parameter</div>
+                    <div class="col-md-3">Sample Values (Valid)</div>
+                    <div class="col-md-3">Random Values (Fuzz)</div>
+                    <div class="col-md-1 text-center">Multi?</div>
+                    <div class="col-md-1 text-center">Include?</div>
+                    <div class="col-md-1 text-center">Isolated?</div>
+                    <div class="col-md-1 text-center"></div>
+                `;
+                paramsCont.appendChild(headerRow);
+
+                ep.params.forEach(p => {
+                    const row = document.createElement('div');
+                    row.className = 'row mb-2 align-items-center';
+
+                    const labelCol = document.createElement('div');
+                    labelCol.className = 'col-md-2';
+                    labelCol.innerHTML = `<label class="form-label mb-0 small" title="${p.in}: ${p.description || ''}">${p.name} ${p.required ? '<span class="text-danger">*</span>' : ''}</label><br><span class="text-muted" style="font-size:0.7em">${p.type}</span>`;
+
+                    // Sample Values (Valid)
+                    const activeCol = document.createElement('div');
+                    activeCol.className = 'col-md-3';
+                    const activeInput = document.createElement('input');
+                    activeInput.type = 'text';
+                    activeInput.className = 'form-control form-control-sm param-input';
+                    activeInput.dataset.name = p.name;
+                    activeInput.placeholder = "S1, S2, S3...";
+                    if (p.example) activeInput.value = p.example;
+                    activeCol.appendChild(activeInput);
+
+                    // Random Values (Fuzz)
+                    const randomCol = document.createElement('div');
+                    randomCol.className = 'col-md-3';
+                    const randomInput = document.createElement('input');
+                    randomInput.type = 'text';
+                    randomInput.className = 'form-control form-control-sm param-input-random';
+                    randomInput.dataset.name = p.name;
+                    randomInput.placeholder = "Random/Fuzz";
+                    randomCol.appendChild(randomInput);
+
+                    // Multi? Toggle
+                    const multiCol = document.createElement('div');
+                    multiCol.className = 'col-md-1 text-center';
+                    const multiCheck = document.createElement('input');
+                    multiCheck.type = 'checkbox';
+                    multiCheck.className = 'form-check-input param-input-multi';
+                    multiCheck.dataset.name = p.name;
+                    multiCol.appendChild(multiCheck);
+
+                    // Include? Toggle
+                    const includeCol = document.createElement('div');
+                    includeCol.className = 'col-md-1 text-center';
+                    const includeCheck = document.createElement('input');
+                    includeCheck.type = 'checkbox';
+                    includeCheck.className = 'form-check-input param-input-include';
+                    includeCheck.dataset.name = p.name;
+                    includeCheck.checked = p.required; // Default on for required, manual for optional
+                    includeCol.appendChild(includeCheck);
+
+                    // Isolated? Toggle
+                    const isolatedCol = document.createElement('div');
+                    isolatedCol.className = 'col-md-1 text-center';
+                    const isolatedCheck = document.createElement('input');
+                    isolatedCheck.type = 'checkbox';
+                    isolatedCheck.className = 'form-check-input param-input-isolated';
+                    isolatedCheck.dataset.name = p.name;
+                    isolatedCol.appendChild(isolatedCheck);
+
+                    const actionCol = document.createElement('div');
+                    actionCol.className = 'col-md-1 text-center';
+
+                    row.appendChild(labelCol);
+                    row.appendChild(activeCol);
+                    row.appendChild(randomCol);
+                    row.appendChild(multiCol);
+                    row.appendChild(includeCol);
+                    row.appendChild(isolatedCol);
+                    row.appendChild(actionCol);
+                    paramsCont.appendChild(row);
+                });
+
+                // Add Generate Random Button
+                const btnRow = document.createElement('div');
+                btnRow.className = "row mt-2";
+                btnRow.innerHTML = `
+                    <div class="col-md-7 offset-md-3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="generateRandomValues()">
+                            <i class="bi bi-shuffle"></i> Generate Random Values
+                        </button>
+                    </div>
+                `;
+                paramsCont.appendChild(btnRow);
+
+            } else {
+                paramsCont.innerHTML = '<p class="text-muted small">No parameters required.</p>';
+            }
+
+            // Clear Custom Params
+            const customCont = document.getElementById('custom-params-container');
+            customCont.innerHTML = '';
+            addCustomParamRow(); // Add one empty row by default
+        }
+
+        function addCustomParamRow() {
+            const container = document.getElementById('custom-params-container');
+            const row = document.createElement('div');
+            row.className = 'row mb-2 custom-param-row';
+            row.innerHTML = `
+                <div class="col-5">
+                    <input type="text" class="form-control form-control-sm custom-key" placeholder="Key (e.g. new_field)">
+                </div>
+                <div class="col-5">
+                    <input type="text" class="form-control form-control-sm custom-val" placeholder="Value">
+                </div>
+                <div class="col-2">
+                    <button class="btn btn-sm btn-outline-danger" onclick="this.parentElement.parentElement.remove()">X</button>
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        function generateRandomValues() {
+            if (!currentEndpoint) return;
+
+            currentEndpoint.params.forEach(p => {
+                // Find random input for this param
+                const inputs = document.getElementsByClassName('param-input-random');
+                let targetInput = null;
+                for (let inp of inputs) {
+                    if (inp.dataset.name === p.name) {
+                        targetInput = inp;
+                        break;
+                    }
+                }
+
+                if (targetInput) {
+                    // Generate garbage/random based on type
+                    if (p.type === 'integer' || p.type === 'number') {
+                        targetInput.value = Math.floor(Math.random() * 10000);
+                    } else if (p.type === 'boolean') {
+                        targetInput.value = Math.random() > 0.5 ? 'true' : 'false';
+                    } else {
+                        // String - maybe a UUID or random text
+                        targetInput.value = "fuzz_" + Math.random().toString(36).substring(7);
+                    }
+                }
+            });
+        }
+
+        async function validateToken() {
+            const authMode = document.querySelector('input[name="auth-mode"]:checked').value;
+            const authToken = document.getElementById('auth-token').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            const btn = document.querySelector('button[onclick="validateToken()"]');
+            const originalText = btn.innerText;
+            btn.innerText = "Checking...";
+            btn.className = "btn btn-outline-secondary disabled";
+
+            try {
+                const res = await fetch('/api/validate-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        auth_mode: authMode,
+                        auth_token: authToken,
+                        username: username,
+                        password: password
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    btn.innerText = "✅ Valid (" + data.code + ")";
+                    btn.className = "btn btn-outline-success";
+                    document.getElementById('auth-token').classList.remove('is-invalid');
+                    document.getElementById('auth-token').classList.add('is-valid');
+                } else {
+                    btn.innerText = "❌ Invalid (" + (data.code || "Error") + ")";
+                    btn.className = "btn btn-outline-danger";
+                    document.getElementById('auth-token').classList.add('is-invalid');
+                }
+            } catch (e) {
+                btn.innerText = "⚠️ Error";
+                btn.className = "btn btn-outline-warning";
+            } finally {
+                setTimeout(() => {
+                    btn.innerText = "Validate";
+                    btn.className = "btn btn-outline-secondary";
+                }, 3000);
+            }
+        }
+
+        async function runTest(offset = 0) {
+            if (!currentEndpoint) return;
+
+            // Collect params
+            const params = {};
+            document.querySelectorAll('.param-input').forEach(input => {
+                if (input.value.trim() !== "") {
+                    params[input.dataset.name] = input.value;
+                }
+            });
+
+            // Collect Random params
+            const randomParams = {};
+            document.querySelectorAll('.param-input-random').forEach(inp => {
+                if (inp.value.trim() !== "") {
+                    randomParams[inp.dataset.name] = inp.value.trim();
+                }
+            });
+
+            // Collect Custom Params
+            const customParams = {};
+            document.querySelectorAll('.custom-param-row').forEach(row => {
+                const key = row.querySelector('.custom-key').value.trim();
+                const val = row.querySelector('.custom-val').value.trim();
+                if (key) {
+                    customParams[key] = val;
+                }
+            });
+
+            // Collect Multi Params
+            const multiParams = [];
+            document.querySelectorAll('.param-input-multi:checked').forEach(inp => {
+                multiParams.push(inp.dataset.name);
+            });
+
+            // Collect Include Params
+            const includeParams = [];
+            document.querySelectorAll('.param-input-include:checked').forEach(inp => {
+                includeParams.push(inp.dataset.name);
+            });
+
+            // Collect Isolated Params
+            const isolatedParams = [];
+            document.querySelectorAll('.param-input-isolated:checked').forEach(inp => {
+                isolatedParams.push(inp.dataset.name);
+            });
+
+            const authMode = document.querySelector('input[name="auth-mode"]:checked').value;
+            const authToken = document.getElementById('auth-token').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const runAI = document.getElementById('run-ai').checked;
+            const autoRun = document.getElementById('auto-run-all').checked;
+
+            // UI Feedback
+            const btn = document.querySelector('button[onclick="runTest()"]');
+            const originalText = btn.innerText;
+            if (offset === 0) {
+                btn.innerText = "Running...";
+                btn.disabled = true;
+                document.getElementById('results-area').style.display = 'none';
+            } else {
+                // If appending, show indicator
+                const nextBtn = document.querySelector('button[onclick^="runTest("]');
+                if (nextBtn) nextBtn.innerText = "Running Batch...";
+            }
+
+            try {
+                const res = await fetch('/api/run-test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        index: currentEndpoint.index,
+                        auth_mode: authMode,
+                        auth_token: authToken,
+                        username: username,
+                        password: password,
+                        params: params,
+                        random_params: randomParams,
+                        custom_params: customParams,
+                        multi_params: multiParams,
+                        include_params: includeParams,
+                        isolated_params: isolatedParams,
+                        random_overrides: randomParams,
+                        run_ai: runAI && offset === 0, // Only run AI on first batch
+                        combinatorial_mode: document.getElementById('combinatorial-mode').value,
+                        comb_offset: offset,
+                        comb_limit: 64
+                    })
+                });
+
+                const result = await res.json();
+
+                // Token Expiry / 401 Interceptor
+                const resText = JSON.stringify(result).toLowerCase();
+                const is401 = (result.status == "401" || (result.baseline && result.baseline.status_code == 401));
+
+                if (is401) {
+                    const isExpired = resText.includes("token expired");
+                    const msg = isExpired ? "⚠️ Session Expired: [401] Token Expired." : "⚠️ Authentication Failed: [401] Unauthorized.";
+
+                    alert(msg + "\nStopping testing. Please update your credentials in the Authentication section.");
+
+                    const tokenInput = document.getElementById('auth-token');
+                    if (tokenInput) {
+                        tokenInput.classList.add('is-invalid');
+                        tokenInput.focus();
+                        tokenInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    return; // HALT RECURSION
+                }
+
+                displayResults(result, offset > 0);
+
+                // Auto-Run Next Batch
+                if (autoRun && result.combinatorial_result) {
+                    const cr = result.combinatorial_result;
+                    const nextOffset = cr.offset + cr.limit;
+                    if (nextOffset < cr.total_count) {
+                        console.log(`Auto-running next batch: ${nextOffset}/${cr.total_count}`);
+                        await new Promise(r => setTimeout(r, 200)); // Small pause for UI
+                        await runTest(nextOffset);
+                    }
+                }
+
+            } catch (e) {
+                console.error("Test Error:", e);
+                alert("Error running test: " + e);
+            } finally {
+                if (offset === 0) {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        let reportData = [];
+        let lastResult = null;
+
+        function filterCombResults() {
+            const query = document.getElementById('comb-filter').value.toLowerCase().trim();
+            const rows = document.querySelectorAll('#comb-table tbody tr');
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+
+        function showCalcDetail() {
+            if (!currentEndpoint) return;
+
+            const modalBody = document.getElementById('calc-body');
+            // Use correct class names from renderParams
+            const includeParams = Array.from(document.querySelectorAll('.param-input-include:checked')).map(cb => cb.dataset.name);
+            const isolatedParams = Array.from(document.querySelectorAll('.param-input-isolated:checked')).map(cb => cb.dataset.name);
+            const multiParams = Array.from(document.querySelectorAll('.param-input-multi:checked')).map(cb => cb.dataset.name);
+
+            let mainParams = includeParams.filter(p => !isolatedParams.includes(p));
+            let isoParams = includeParams.filter(p => isolatedParams.includes(p));
+
+            let html = `<h6>Step 1: Calculate Pool Sizes</h6>`;
+            html += `<table class="table table-sm table-bordered mt-2">
+                <thead>
+                    <tr class="table-light">
+                        <th>Parameter</th>
+                        <th>Status</th>
+                        <th>Samples</th>
+                        <th>Type</th>
+                        <th>Pool Size</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            let mainPoolSizes = [];
+            let isolationSum = 0;
+            let poolCalcDetails = {}; // To store for step 2 display
+
+            includeParams.forEach(pName => {
+                const param = currentEndpoint.params.find(p => p.name === pName);
+                if (!param) return;
+
+                const input = document.querySelector(`.param-input[data-name="${pName}"]`);
+                const val = input ? input.value : "";
+                let samples = [];
+                if (val) {
+                    if (val.includes(',')) {
+                        samples = val.split(',').map(s => s.trim());
+                    } else {
+                        samples = [val.trim()];
+                    }
+                }
+
+                // Boolean auto-coverage
+                if (param.type === 'boolean') {
+                    const sampleLower = samples.map(s => s.toString().toLowerCase());
+                    if (!sampleLower.includes('true')) samples.push('true');
+                    if (!sampleLower.includes('false')) samples.push('false');
+                }
+
+                // PowerSet logic if multi
+                let variantCount = samples.length;
+                if (multiParams.includes(pName)) {
+                    variantCount = Math.pow(2, samples.length) - 1;
+                }
+
+                // Final Pool Size calculation
+                let finalSize = variantCount;
+                if (variantCount > 0) {
+                    if (!param.required && !samples.includes("")) finalSize += 1; // Add None
+                } else {
+                    finalSize = param.required ? 2 : 1;
+                }
+
+                const isIso = isolatedParams.includes(pName);
+                if (isIso) {
+                    isolationSum += (finalSize - 1);
+                } else {
+                    mainPoolSizes.push(finalSize);
+                }
+
+                poolCalcDetails[pName] = finalSize;
+
+                html += `<tr>
+                    <td>${pName} ${isIso ? '<span class="badge bg-info">Isolated</span>' : ''}</td>
+                    <td>${param.required ? 'Required' : 'Optional'}</td>
+                    <td>${samples.length || 0}</td>
+                    <td>${multiParams.includes(pName) ? 'PowerSet' : 'Single'}</td>
+                    <td><strong>${finalSize}</strong></td>
+                </tr>`;
+            });
+
+            html += `</tbody></table>`;
+
+            let cartesianProduct = mainPoolSizes.length > 0 ? mainPoolSizes.reduce((a, b) => a * b, 1) : 1;
+
+            html += `<h6 class="mt-4">Step 2: Apply Combination Formula</h6>
+            <div class="alert alert-light border">
+                <div class="mb-2"><strong>A. Main Combinations (Cartesian Product of non-isolated):</strong></div>
+                <div class="mb-2"><code>${mainPoolSizes.join(' × ') || '1'} = ${cartesianProduct}</code></div>
+                
+                <div class="mt-3 mb-2"><strong>B. Isolated Variants (Sum of isolated pools - baseline):</strong></div>
+                <div class="mb-2"><code>${isoParams.map(p => '(' + poolCalcDetails[p] + ' - 1)').join(' + ') || '0'} = ${isolationSum}</code></div>
+
+                <hr>
+                <div class="mt-3">
+                    <strong>Total Count = A + B</strong><br>
+                    <div class="h5 mt-1 text-primary"><code>${cartesianProduct} + ${isolationSum} = ${cartesianProduct + isolationSum}</code> Total Test Cases</div>
+                </div>
+            </div>`;
+
+            modalBody.innerHTML = html;
+            new bootstrap.Modal(document.getElementById('calc-modal')).show();
+        }
+
+        function displayResults(data, appendComb = false) {
+            lastResult = data;
+            if (data.error) {
+                alert("Server Error: " + data.error);
+                return;
+            }
+
+            document.getElementById('results-area').style.display = 'block';
+
+            // Only show AI Smart card if baseline was reasonably successful and is JSON
+            const baseline = data.baseline;
+            if (baseline && baseline.status_code === 200 && baseline.is_json) {
+                document.getElementById('ai-smart-card').style.display = 'block';
+                document.getElementById('ai-smart-output').innerHTML = '<p class="text-muted small">Run discovery to see AI-suggested test cases for filters and sorting.</p>';
+            } else {
+                document.getElementById('ai-smart-card').style.display = 'none';
+            }
+
+            // Baseline
+            const bl = data.baseline;
+            if (!bl) {
+                alert("Error: Invalid test result format");
+                return;
+            }
+            document.getElementById('res-code').innerText = bl.status_code;
+            document.getElementById('res-time').innerText = bl.response_time_ms;
+            document.getElementById('res-json').innerText = bl.is_json ? "Yes" : "No";
+
+            // Schema
+            const schemaSpan = document.getElementById('res-schema');
+            if (bl.schema_validation === "PASS") {
+                schemaSpan.innerHTML = '<span class="badge bg-success">PASS</span>';
+            } else if (bl.schema_validation === "N/A") {
+                schemaSpan.innerHTML = '<span class="text-muted">N/A</span>';
+            } else {
+                schemaSpan.innerHTML = `<span class="badge bg-danger">FAIL</span> <small>${bl.schema_validation}</small>`;
+            }
+
+            document.getElementById('res-status').innerText = bl.status_code === 200 ? "PASS" : "FAIL";
+            document.getElementById('res-status').className = bl.status_code === 200 ? "text-success" : "text-danger";
+
+            // Body
+            try {
+                const jsonBody = JSON.parse(bl.body_preview || "{}"); // It comes as string preview from backend? 
+                // Wait, backend sends 'body_preview' string. 
+                document.getElementById('res-body').innerText = bl.body_preview || "(No content)";
+            } catch (e) {
+                document.getElementById('res-body').innerText = bl.body_preview || "(No content)";
+            }
+
+            // Auth Analysis
+            const sa = data.special_auth;
+            if (sa) {
+                // Token Only
+                const tr = sa.token_only;
+                const tokenSpan = document.getElementById('auth-token-res');
+                if (tr && tr.status_code === 200) {
+                    tokenSpan.innerHTML = `<span class="badge bg-success">PASS</span> Status 200`;
+                } else if (tr && tr.status_code) {
+                    tokenSpan.innerHTML = `<span class="badge bg-danger">FAIL</span> Status ${tr.status_code}`;
+                } else {
+                    tokenSpan.innerText = "N/A";
+                }
+
+                // Deep QA Section
+                const deepCard = document.getElementById('deep-qa-card');
+                let hasDeepData = false;
+
+                // Logic Findings
+                const logicList = document.getElementById('logic-list');
+                logicList.innerHTML = '';
+                if (data.logic_findings && data.logic_findings.length > 0) {
+                    hasDeepData = true;
+                    data.logic_findings.forEach(f => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item py-1';
+                        const icon = f.includes('SECURITY') ? '⚠️' : (f.includes('WARN') ? 'ℹ️' : '✅');
+                        li.innerText = `${icon} ${f}`;
+                        logicList.appendChild(li);
+                    });
+                } else {
+                    logicList.innerHTML = '<li class="list-group-item text-muted">No specific findings.</li>';
+                }
+
+                // Path Fuzzing
+                const pfSection = document.getElementById('path-fuzz-section');
+                const pfBody = document.getElementById('path-fuzz-body');
+                pfBody.innerHTML = '';
+                if (data.path_fuzz_results && data.path_fuzz_results.length > 0) {
+                    hasDeepData = true;
+                    pfSection.style.display = 'block';
+                    data.path_fuzz_results.forEach(r => {
+                        const tr = document.createElement('tr');
+                        const resClass = r.result.includes('PASS') ? 'text-success' : (r.result.includes('WARN') ? 'text-warning' : 'text-danger');
+                        tr.innerHTML = `
+                            <td><code>${r.param}</code></td>
+                            <td><code>${r.value}</code></td>
+                            <td>${r.status_code}</td>
+                            <td class="${resClass}"><strong>${r.result}</strong></td>
+                        `;
+                        pfBody.appendChild(tr);
+                    });
+                } else {
+                    pfSection.style.display = 'none';
+                }
+
+                // Enum Validation
+                const enumSection = document.getElementById('enum-section');
+                const enumList = document.getElementById('enum-list');
+                enumList.innerHTML = '';
+                if (data.enum_results && data.enum_results.length > 0) {
+                    hasDeepData = true;
+                    enumSection.style.display = 'block';
+                    data.enum_results.forEach(r => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item py-1';
+                        const badge = r.passed ? '<span class="badge bg-success">PASS</span>' : '<span class="badge bg-danger">FAIL</span>';
+                        li.innerHTML = `${badge} <code>${r.param}</code> rejected invalid value (Status: ${r.status_code})`;
+                        enumList.appendChild(li);
+                    });
+                } else {
+                    enumSection.style.display = 'none';
+                }
+
+                // Combinatorial
+                const combSection = document.getElementById('combinatorial-section');
+                const combRes = document.getElementById('combinatorial-res');
+                if (data.combinatorial_result) {
+                    hasDeepData = true;
+                    combSection.style.display = 'block';
+
+                    let crData = data.combinatorial_result;
+                    let crList = [];
+                    let totalCount = 0;
+                    let currentOffset = 0;
+                    let currentLimit = 64;
+
+                    if (Array.isArray(crData)) {
+                        crList = crData;
+                        totalCount = crList.length;
+                    } else {
+                        crList = crData.results || [];
+                        totalCount = crData.total_count || crList.length;
+                        currentOffset = crData.offset || 0;
+                        currentLimit = crData.limit || 64;
+                    }
+
+                    if (appendComb && window.lastCombResults) {
+                        window.lastCombResults = window.lastCombResults.concat(crList);
+                    } else {
+                        window.lastCombResults = crList;
+                    }
+
+                    const fullList = window.lastCombResults;
+
+                    if (fullList.length === 1 && fullList[0].combination === "Required Only") {
+                        const cr = fullList[0];
+                        const badge = cr.passed ? '<span class="badge bg-success">PASS</span>' : '<span class="badge bg-danger">FAIL</span>';
+                        combRes.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>${badge} Minimal request (skipped: <i>${cr.skipped.join(', ')}</i>) status <strong>${cr.status_code}</strong>.</span>
+                                <button class="btn btn-xs btn-outline-info" onclick="showCombModal(0)">View JSON</button>
+                            </div>
+                        `;
+                    } else {
+                        let html = `
+                            <table id="comb-table" class="table table-sm table-bordered x-small mt-2">
+                                <thead class="table-light">
+                                    <tr><th>Included Params</th><th>Status</th><th>Pass</th><th>Action</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${fullList.map((r, idx) => `
+                                        <tr>
+                                            <td><code style="font-size:0.85em">${r.combination}</code></td>
+                                            <td>${r.status_code}</td>
+                                            <td>${r.passed ? '✅' : '❌'}</td>
+                                            <td><button class="btn btn-xxs btn-outline-info" onclick="showCombModal(${idx})">JSON</button></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+
+                        if (currentOffset + currentLimit < totalCount) {
+                            html += `
+                                <div class="text-center mt-2">
+                                    <small class="text-muted d-block mb-1">Showing ${fullList.length} of ${totalCount} combinations</small>
+                                    <button class="btn btn-xs btn-outline-primary" onclick="runTest(${currentOffset + currentLimit})">
+                                        Run Next ${Math.min(currentLimit, totalCount - (currentOffset + currentLimit))}
+                                    </button>
+                                </div>
+                            `;
+                        } else if (totalCount > currentLimit) {
+                            html += `<div class="text-center mt-2 small text-muted">All ${totalCount} combinations completed.</div>`;
+                        }
+
+                        combRes.innerHTML = html;
+                    }
+                } else {
+                    combSection.style.display = 'none';
+                }
+                deepCard.style.display = hasDeepData ? 'block' : 'none';
+
+                // Field Progression Section
+                const fpSection = document.getElementById('field-progression-section');
+                const fpContent = document.getElementById('field-progression-content');
+                fpContent.innerHTML = '';
+                if (data.field_progression && data.field_progression.length > 0) {
+                    fpSection.style.display = 'block';
+                    data.field_progression.forEach(fp => {
+                        const div = document.createElement('div');
+                        div.className = 'mb-2 p-2 border rounded bg-light small';
+
+                        let subsetHtml = "";
+                        if (fp.subset) {
+                            subsetHtml = `
+                                <div class="mt-1">
+                                    <strong>Subset Test (<code>${fp.subset.value}</code>):</strong> Status ${fp.subset.status_code}<br>
+                                    <span class="text-muted">Fields: ${fp.subset.keys.join(', ') || 'None'}</span>
+                                </div>
+                            `;
+                        }
+
+                        div.innerHTML = `
+                            <strong>Selector: <code>${fp.param}</code></strong><br>
+                            <div>
+                                <strong>Empty Test:</strong> Status ${fp.empty_status}<br>
+                                <span class="text-muted">Default Fields: ${fp.empty_keys.join(', ') || 'None'}</span>
+                            </div>
+                            ${subsetHtml}
+                        `;
+                        fpContent.appendChild(div);
+                    });
+                } else {
+                    fpSection.style.display = 'none';
+                }
+
+                // Detailed Audit Section
+                const auditCard = document.getElementById('audit-card');
+                auditCard.style.display = 'block';
+                document.getElementById('audit-url').innerText = bl.url;
+                document.getElementById('audit-method').innerText = bl.method;
+
+                // Setup Audit Tab Switching
+                const auditContent = {
+                    'req-headers': JSON.stringify(bl.request_headers, null, 2),
+                    'res-headers': JSON.stringify(bl.headers, null, 2),
+                    'full-body': bl.body_full || "(No body content)"
+                };
+
+                const tabs = document.querySelectorAll('#audit-tabs .nav-link');
+                const pre = document.getElementById('audit-pre');
+
+                // Set initial content
+                pre.innerText = auditContent['req-headers'];
+
+                tabs.forEach(tab => {
+                    tab.onclick = (e) => {
+                        e.preventDefault();
+                        tabs.forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        const key = tab.getAttribute('data-tab');
+                        pre.innerText = auditContent[key];
+                    };
+                });
+
+                // Invalid Token Test (New)
+                const it = sa.invalid_token;
+                const invSpan = document.getElementById('auth-invalid-res');
+                if (invSpan && it) {
+                    if (it.status_code === 401 || it.status_code === 403) {
+                        invSpan.innerHTML = `<span class="badge bg-success">PASS</span> Status ${it.status_code}`;
+                    } else {
+                        invSpan.innerHTML = `<span class="badge bg-danger">FAIL</span> Status ${it.status_code} (Expected 401/403)`;
+                    }
+                }
+
+                // Creds Only
+                const cr = sa.creds_only;
+                const credsSpan = document.getElementById('auth-creds-res');
+                if (cr) {
+                    if (cr.status_code === 200) {
+                        credsSpan.innerHTML = `<span class="badge bg-success">PASS</span> Status 200`;
+                    } else if (cr.status_code) {
+                        credsSpan.innerHTML = `<span class="badge bg-warning text-dark">WARN</span> Status ${cr.status_code}`;
+                    } else {
+                        credsSpan.innerText = "No status returned";
+                    }
+                } else {
+                    // Fallback to standard auth test if no creds params
+                    const ar = data.auth_test;
+                    if (ar) {
+                        if (ar.status_code === 401 || ar.status_code === 403) {
+                            credsSpan.innerHTML = `<span class="badge bg-success">PASS</span> Enforced (${ar.status_code})`;
+                        } else if (ar.status_code === 200) {
+                            credsSpan.innerHTML = `<span class="badge bg-danger">FAIL</span> Open (${ar.status_code})`;
+                        } else {
+                            credsSpan.innerText = `Status ${ar.status_code}`;
+                        }
+                    } else {
+                        credsSpan.innerText = "Not Tested";
+                    }
+                }
+            }
+
+            // Param Analysis
+            const pRes = data.param_results;
+            if (pRes && pRes.length > 0) {
+                document.getElementById('param-card').style.display = 'block';
+                const tbody = document.getElementById('param-table-body');
+                tbody.innerHTML = '';
+                pRes.forEach(p => {
+                    const tr = document.createElement('tr');
+                    const reqBadge = p.required_by_test ? '<span class="badge bg-danger">YES</span>' : '<span class="badge bg-success">NO</span>';
+                    tr.innerHTML = `
+                        <td>${p.param}</td>
+                        <td>${p.required_by_spec ? 'Yes' : 'No'}</td>
+                        <td>${reqBadge}</td>
+                        <td>${p.status_without}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                document.getElementById('param-card').style.display = 'none';
+            }
+
+            // Empty Values
+            const eRes = data.empty_results;
+            if (eRes && eRes.length > 0) {
+                document.getElementById('empty-card').style.display = 'block';
+                const tbody = document.getElementById('empty-table-body');
+                tbody.innerHTML = '';
+                eRes.forEach(e => {
+                    const tr = document.createElement('tr');
+                    const handledBadge = e.graceful ? '<span class="badge bg-success">OK</span>' : '<span class="badge bg-warning text-dark">WARN</span>';
+                    tr.innerHTML = `
+                        <td>${e.param}</td>
+                        <td>${e.status_empty}</td>
+                        <td>${handledBadge}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                document.getElementById('empty-card').style.display = 'none';
+            }
+
+            // Negative Tests
+            const nRes = data.negative_results;
+            if (nRes && nRes.length > 0) {
+                document.getElementById('neg-card').style.display = 'block';
+                const tbody = document.getElementById('neg-table-body');
+                tbody.innerHTML = '';
+                nRes.forEach(n => {
+                    const tr = document.createElement('tr');
+                    const passBadge = n.passed ? '<span class="badge bg-success">PASS</span>' : '<span class="badge bg-danger">FAIL</span>';
+                    tr.innerHTML = `
+                        <td>${n.test}</td>
+                        <td>${n.status_code}</td>
+                        <td>${passBadge}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                document.getElementById('neg-card').style.display = 'none';
+            }
+
+            // Fuzz Results
+            const fz = data.fuzz_test_results;
+            const fzCard = document.getElementById('fuzz-card');
+
+            if (fz && fz.length > 0) {
+                fzCard.style.display = 'block';
+                const tbody = document.getElementById('fuzz-table-body');
+                tbody.innerHTML = '';
+
+                fz.forEach(f => {
+                    const tr = document.createElement('tr');
+                    // Truncate response
+                    let preview = "(No body)";
+                    if (f.body_preview) {
+                        preview = f.body_preview.length > 100
+                            ? f.body_preview.substring(0, 100) + "..."
+                            : f.body_preview;
+                    }
+
+                    tr.innerHTML = `
+                        <td><code>${f.param}</code></td>
+                        <td><code>${f.value}</code></td>
+                        <td>${f.status_code}</td>
+                        <td title="${f.body_preview || ''}">${preview}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                fzCard.style.display = 'none';
+            }
+
+            // AI
+            const aiCard = document.getElementById('ai-card');
+            if (aiCard) {
+                if (data.ai_analysis) {
+                    aiCard.style.display = 'block';
+                    document.getElementById('ai-output').innerText = data.ai_analysis;
+                } else {
+                    aiCard.style.display = 'none';
+                }
+            }
+
+            document.getElementById('append-report-btn').style.display = 'block';
+        }
+
+        function appendToReport() {
+            if (!lastResult) return;
+            const bl = lastResult.baseline;
+            const logEntry = {
+                timestamp: new Date().toLocaleTimeString(),
+                method: bl.method,
+                path: bl.url,
+                status: bl.status_code,
+                findings: lastResult.logic_findings || []
+            };
+            reportData.push(logEntry);
+            renderReport();
+        }
+
+        function renderReport() {
+            const card = document.getElementById('report-card');
+            const history = document.getElementById('report-history');
+            card.style.display = 'block';
+            history.innerHTML = '';
+
+            reportData.slice().reverse().forEach((entry, idx) => {
+                const item = document.createElement('div');
+                item.className = 'mb-3 border-bottom pb-2';
+                item.innerHTML = `
+                    <div class="d-flex justify-content-between small fw-bold">
+                        <span>${entry.timestamp} - ${entry.method} ${entry.path}</span>
+                        <span class="text-${entry.status === 200 ? 'success' : 'danger'}">Status ${entry.status}</span>
+                    </div>
+                    <ul class="list-unstyled x-small text-muted mb-0">
+                        ${entry.findings.map(f => `<li>• ${f}</li>`).join('')}
+                    </ul>
+                `;
+                history.appendChild(item);
+            });
+        }
+
+        async function runSmartAITest() {
+            if (!currentEndpoint || !lastResult) return;
+
+            const btn = document.getElementById('run-smart-ai-btn');
+            const output = document.getElementById('ai-smart-output');
+
+            btn.innerText = "Discovering...";
+            btn.disabled = true;
+            output.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary"></div> AI is discovering high-value scenarios...</div>';
+            window.aiResponses = {}; // Clear before new discovery
+
+            try {
+                const res = await fetch('/api/ai-suggest-tests', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        index: currentEndpoint.index,
+                        baseline: lastResult.baseline,
+                        auth_mode: document.querySelector('input[name="auth-mode"]:checked').value,
+                        auth_token: document.getElementById('auth-token').value,
+                        username: document.getElementById('username').value,
+                        password: document.getElementById('password').value,
+                        cr_description: document.getElementById('cr-description').value
+                    })
+                });
+
+                const responseText = await res.text();
+                let plan;
+                try {
+                    plan = JSON.parse(responseText);
+                } catch (e) {
+                    output.innerHTML = `<div class="alert alert-danger font-monospace small">Server returned non-JSON. <br>Code: ${res.status}</div>`;
+                    console.error("Non-JSON API Suggest Response:", responseText);
+                    return;
+                }
+                if (plan.error) {
+                    output.innerHTML = `<div class="alert alert-danger font-monospace small">${plan.error}</div>`;
+                } else {
+                    const allTests = [
+                        ...(plan.filter_tests || []),
+                        ...(plan.sort_tests || []),
+                        ...(plan.edge_case_tests || [])
+                    ];
+
+                    window.currentSuggestions = allTests; // Store globally
+
+                    if (allTests.length > 0) {
+                        output.innerHTML = `
+                            <table class="table table-sm table-bordered x-small mb-0">
+                                <thead class="table-light">
+                                    <tr><th>Scenario / Reason</th><th>Param</th><th>Value</th><th>Action</th><th>Status / Logic Check</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${allTests.map((t, idx) => `
+                                        <tr id="ai-row-${idx}">
+                                            <td><small class="text-muted d-block">${t.reason}</small></td>
+                                            <td><code>${t.param}</code></td>
+                                            <td><code>${t.value}</code></td>
+                                            <td>
+                                                <button class="btn btn-xs btn-outline-primary" onclick="runAndVerifyTest(${idx})">Run & Verify</button>
+                                            </td>
+                                            <td id="ai-res-${idx}" class="text-muted italic">Ready...</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                    } else {
+                        output.innerHTML = '<p class="text-muted small">No suggestions found.</p>';
+                    }
+                }
+            } catch (e) {
+                output.innerHTML = `<div class="alert alert-danger small">Error: ${e}</div>`;
+            } finally {
+                btn.innerText = "Run smart AI discovery";
+                btn.disabled = false;
+            }
+        }
+
+        async function runAndVerifyTest(idx) {
+            const testCase = window.currentSuggestions[idx];
+            if (!testCase) return;
+
+            const resCell = document.getElementById(`ai-res-${idx}`);
+            const row = document.getElementById(`ai-row-${idx}`);
+
+            resCell.innerHTML = '<div class="spinner-border spinner-border-xs text-info"></div> Running...';
+            row.classList.add('table-primary');
+
+            try {
+                const res = await fetch('/api/ai-execute-and-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        index: currentEndpoint.index,
+                        baseline: lastResult.baseline,
+                        test_case: testCase,
+                        auth_mode: document.querySelector('input[name="auth-mode"]:checked').value,
+                        auth_token: document.getElementById('auth-token').value,
+                        username: document.getElementById('username').value,
+                        password: document.getElementById('password').value
+                    })
+                });
+
+                const responseText = await res.text();
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (e) {
+                    resCell.innerHTML = `<div class="text-danger small">Server returned non-JSON. <br>Code: ${res.status}</div>`;
+                    console.error("Non-JSON Response:", responseText);
+                    return;
+                }
+                if (result.error) {
+                    resCell.innerHTML = `<span class="text-danger small">${result.error}</span>`;
+                } else {
+                    const statusClass = result.status_code === 200 ? 'success' : 'warning';
+
+                    // Save full body for modal
+                    if (!window.aiResponses) window.aiResponses = {};
+                    window.aiResponses[idx] = result.body_full || result.body_preview || "No body returned";
+
+                    resCell.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="badge bg-${statusClass}">${result.status_code}</span>
+                            <button class="btn btn-xs btn-outline-info ms-2" onclick="showResponseModal(${idx})">View JSON</button>
+                        </div>
+                        <div class="small fw-bold text-dark">Analysis:</div>
+                        <div class="small text-muted">${result.analysis}</div>
+                    `;
+
+                    // Add to report
+                    reportData.push({
+                        timestamp: new Date().toLocaleTimeString(),
+                        method: currentEndpoint.method,
+                        path: `${currentEndpoint.path}?${testCase.param}=${testCase.value}`,
+                        status: result.status_code,
+                        findings: [
+                            `Scenario: ${testCase.reason}`,
+                            `AI Logic Check: ${result.analysis}`
+                        ]
+                    });
+                    renderReport();
+                }
+            } catch (e) {
+                resCell.innerHTML = `<span class="text-danger">Error: ${e}</span>`;
+            } finally {
+                row.classList.remove('table-primary');
+            }
+        }
+
+        // Jira Scoping logic
+        async function runJiraScope() {
+            const jiraId = document.getElementById('jira-id').value.trim();
+            if (!jiraId) {
+                alert("Please enter a Jira Task ID");
+                return;
+            }
+
+            const btn = document.querySelector('button[onclick="runJiraScope()"]');
+            const originalText = btn.innerText;
+            btn.innerText = "...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/jira-scope', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ issue_id: jiraId })
+                });
+
+                const data = await res.json();
+                if (data.error) {
+                    alert("Jira Error: " + data.error);
+                } else {
+                    const recommendations = data.scoping.recommendations || [];
+                    recommendedIndices = recommendations.map(r => r.index);
+                    recommendationsMap = {};
+                    recommendations.forEach(r => {
+                        recommendationsMap[r.index] = r.reason;
+                    });
+
+                    // Show filter toggle
+                    document.getElementById('recommended-filter-group').style.display = 'block';
+
+                    // Re-render list with sorting
+                    renderList(allEndpoints);
+
+                    // Auto-populate CR description for AI Discovery
+                    let jiraContext = `Jira: ${data.jira.key} - ${data.jira.summary}\n${data.jira.description_text}`;
+                    if (data.jira.comments && data.jira.comments.length > 0) {
+                        jiraContext += `\n\nRecent Comments:\n${data.jira.comments.join('\n')}`;
+                    }
+                    document.getElementById('cr-description').value = jiraContext;
+
+                    alert(`AI identified ${recommendedIndices.length} relevant endpoints for ${data.jira.key}. They have been moved to the top of the list.`);
+                }
+            } catch (e) {
+                alert("Scoping Error: " + e);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+
+</html>
+```

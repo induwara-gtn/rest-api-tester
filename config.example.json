@@ -1,0 +1,22 @@
+{
+    "gemini_api_key": "YOUR_GEMINI_API_KEY",
+    "services": [
+        {
+            "name": "Calc Service",
+            "url": "https://calcsrv-uat.feedgma.com/",
+            "auth_token": "YOUR_AUTH_TOKEN"
+        },
+        {
+            "name": "Search Service",
+            "url": "https://searchservice-uat.feedgma.com/",
+            "auth_token": "YOUR_AUTH_TOKEN"
+        }
+    ],
+    "auth_type": "Bearer",
+    "auth_header": "Authorization",
+    "timeout_seconds": 10,
+    "response_time_limit_ms": 400,
+    "jira_url": "https://gtngroup.atlassian.net/browse",
+    "jira_email": "your.email@example.com",
+    "jira_api_token": "YOUR_JIRA_API_TOKEN"
+}
