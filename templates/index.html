@@ -1085,15 +1085,22 @@
                 if (!param) return;
 
                 const input = document.querySelector(`.param-input[data-name="${pName}"]`);
-                const val = input ? input.value : "";
+                const rawVal = input ? input.value : "";
                 let samples = [];
-                if (val) {
-                    if (val.includes(',')) {
-                        samples = val.split(',').map(s => s.trim());
+                if (rawVal) {
+                    if (rawVal.includes(',')) {
+                        if (multiParams.includes(pName)) {
+                            // Multi ON: all comma-separated values are samples
+                            samples = rawVal.split(',').map(s => s.trim());
+                        } else {
+                            // Multi OFF: only the first value is used (matches baseline fix)
+                            samples = [rawVal.split(',')[0].trim()];
+                        }
                     } else {
-                        samples = [val.trim()];
+                        samples = [rawVal.trim()];
                     }
                 }
+
 
                 // Boolean auto-coverage
                 if (param.type === 'boolean') {
