@@ -1151,6 +1151,134 @@
             new bootstrap.Modal(document.getElementById('calc-modal')).show();
         }
 
+        // ── AI Smart Discovery ──────────────────────────────────
+        let aiSuggestions = []; // Store suggestions globally for per-row execution
+
+        async function runSmartAITest() {
+            if (!currentEndpoint || !lastResult || !lastResult.baseline) {
+                alert('Please run a test first to get a baseline response.');
+                return;
+            }
+
+            const btn = document.getElementById('run-smart-ai-btn');
+            const output = document.getElementById('ai-smart-output');
+            const crDesc = document.getElementById('cr-description').value.trim();
+
+            btn.innerText = 'Analyzing...';
+            btn.disabled = true;
+            output.innerHTML = '<p class="text-muted small"><i class="bi bi-hourglass-split"></i> Gemini is analyzing your baseline response...</p>';
+
+            try {
+                const res = await fetch('/api/ai-suggest-tests', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        index: currentEndpoint.index,
+                        baseline: lastResult.baseline,
+                        cr_description: crDesc || null
+                    })
+                });
+                const plan = await res.json();
+
+                if (plan.error) {
+                    output.innerHTML = `<div class="alert alert-warning">${plan.error}</div>`;
+                    return;
+                }
+
+                // Flatten all suggestions
+                aiSuggestions = [];
+                (plan.filter_tests || []).forEach(t => aiSuggestions.push({ ...t, category: 'Filter' }));
+                (plan.sort_tests || []).forEach(t => aiSuggestions.push({ ...t, category: 'Sort' }));
+                (plan.edge_case_tests || []).forEach(t => aiSuggestions.push({ ...t, category: 'Edge Case' }));
+
+                if (aiSuggestions.length === 0) {
+                    output.innerHTML = '<div class="alert alert-info">AI returned no suggestions for this endpoint.</div>';
+                    return;
+                }
+
+                // Render table
+                let html = `<table class="table table-sm table-bordered">
+                    <thead><tr class="table-light">
+                        <th>#</th><th>Category</th><th>Param</th><th>Value</th><th>Reason</th><th>Status</th><th>Analysis</th><th>Action</th>
+                    </tr></thead><tbody>`;
+
+                aiSuggestions.forEach((s, i) => {
+                    const catBadge = s.category === 'Filter' ? 'bg-info' : s.category === 'Sort' ? 'bg-warning text-dark' : 'bg-secondary';
+                    html += `<tr id="ai-row-${i}">
+                        <td>${i + 1}</td>
+                        <td><span class="badge ${catBadge}">${s.category}</span></td>
+                        <td><code>${s.param}</code></td>
+                        <td><code>${s.value}</code></td>
+                        <td class="small">${s.reason || '-'}</td>
+                        <td id="ai-status-${i}">-</td>
+                        <td id="ai-analysis-${i}" class="small">-</td>
+                        <td><button class="btn btn-sm btn-outline-primary" id="ai-run-btn-${i}" onclick="runSingleAISuggestion(${i})"><i class="bi bi-play-fill"></i> Run</button></td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                output.innerHTML = html;
+            } catch (err) {
+                output.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            } finally {
+                btn.innerText = 'Run smart AI discovery';
+                btn.disabled = false;
+            }
+        }
+
+        async function runSingleAISuggestion(idx) {
+            const suggestion = aiSuggestions[idx];
+            if (!suggestion) return;
+
+            const btn = document.getElementById(`ai-run-btn-${idx}`);
+            const statusCell = document.getElementById(`ai-status-${idx}`);
+            const analysisCell = document.getElementById(`ai-analysis-${idx}`);
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+            statusCell.innerHTML = '<span class="text-muted">Running...</span>';
+            analysisCell.innerHTML = '<span class="text-muted">Waiting...</span>';
+
+            const authMode = document.querySelector('input[name="auth-mode"]:checked').value;
+            const authToken = document.getElementById('auth-token').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch('/api/ai-execute-and-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        index: currentEndpoint.index,
+                        baseline: lastResult.baseline,
+                        test_case: { param: suggestion.param, value: suggestion.value, reason: suggestion.reason },
+                        auth_mode: authMode,
+                        token: authToken,
+                        username: username,
+                        password: password
+                    })
+                });
+                const result = await res.json();
+
+                if (result.error) {
+                    statusCell.innerHTML = `<span class="badge bg-danger">ERROR</span>`;
+                    analysisCell.innerHTML = result.error;
+                } else {
+                    const code = result.status_code;
+                    const badge = code >= 200 && code < 300 ? 'bg-success' : code >= 400 ? 'bg-danger' : 'bg-warning text-dark';
+                    statusCell.innerHTML = `<span class="badge ${badge}">${code}</span>`;
+                    analysisCell.innerHTML = result.analysis || result.body_preview || '-';
+                }
+
+                btn.innerHTML = '<i class="bi bi-check-lg"></i> Done';
+            } catch (err) {
+                statusCell.innerHTML = `<span class="badge bg-danger">ERR</span>`;
+                analysisCell.innerHTML = err.message;
+                btn.innerHTML = '<i class="bi bi-x-lg"></i>';
+            }
+        }
+        // ── End AI Smart Discovery ──────────────────────────────
+
         function displayResults(data, appendComb = false) {
             lastResult = data;
             if (data.error) {
