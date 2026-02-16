@@ -904,7 +904,13 @@
             const params = {};
             document.querySelectorAll('.param-input').forEach(input => {
                 if (input.value.trim() !== "") {
-                    params[input.dataset.name] = input.value;
+                    let val = input.value.trim();
+                    // If Multi is OFF but value has commas, use only the first value for baseline
+                    const isMulti = document.querySelector(`.param-input-multi[data-name="${input.dataset.name}"]`);
+                    if ((!isMulti || !isMulti.checked) && val.includes(',')) {
+                        val = val.split(',')[0].trim();
+                    }
+                    params[input.dataset.name] = val;
                 }
             });
 
