@@ -659,11 +659,13 @@ def run_combinatorial_tests(endpoint, base_url, headers, config, base_overrides=
         # 'None' (missing) is added at the end for optional parameters.
         if seen:
             pool = seen
-            if not p["required"] and None not in seen:
+            # User Request: "empty should be another combination to consider" regardless of required status
+            if None not in seen:
                 pool.append(None)
         else:
             if p["required"]:
                 ex = p.get("example") or p.get("default") or "test"
+                # Even if required, test "Missing" case
                 pool = [str(ex), None]
             else:
                 pool = [None]

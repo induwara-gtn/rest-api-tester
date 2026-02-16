@@ -1118,7 +1118,7 @@
                 // Final Pool Size calculation
                 let finalSize = variantCount;
                 if (variantCount > 0) {
-                    if (!param.required && !samples.includes("")) finalSize += 1; // Add None
+                    if (!samples.includes("")) finalSize += 1; // Always Add None (User Request)
                 } else {
                     finalSize = param.required ? 2 : 1;
                 }
@@ -1137,7 +1137,7 @@
                     <td>${param.required ? 'Required' : 'Optional'}</td>
                     <td>${samples.length || 0}</td>
                     <td>${multiParams.includes(pName) ? 'PowerSet' : 'Single'}</td>
-                    <td><strong>${finalSize}</strong></td>
+                    <td><strong>${finalSize} ${finalSize > variantCount ? '(+ Empty)' : ''}</strong></td>
                 </tr>`;
             });
 
